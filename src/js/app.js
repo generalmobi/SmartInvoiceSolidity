@@ -2,6 +2,13 @@ App = {
   web3Provider: null,
   contracts: {},
 
+
+  parseDate: function (input) {
+    var parts = input.split('-');
+    // new Date(year, month [, day [, hours[, minutes[, seconds[, ms]]]]])
+    return new Date(parts[0]-1, parts[0], parts[2]); // Note: months are 0-based
+  },
+
   init: function() {
 
     // Load pets.
@@ -9,18 +16,68 @@ App = {
       var invoiceRow = $('#invoiceRow');
       var invoiceTemplate = $('#invoiceTemplate');
 
-      for (i = 0; i < data.length; i ++) {
+  
 
-        invoiceTemplate.find('.invoice-id').text(data[i].id);
-        invoiceTemplate.find('.invoice-supplier').text(data[i].supplier);
-        invoiceTemplate.find('.invoice-buyer').text(data[i].currentBuyer);
-        invoiceTemplate.find('.invoice-value').text(data[i].totalValue);
-        invoiceTemplate.find('.invoice-duedate').text(data[i].dueDate);
-        invoiceTemplate.find('.invoice-riskrating').text(data[i].riskRating);
-        invoiceTemplate.find('.btn-applyrating').attr('data-id', data[i].id);
+      
+  
+      web3.eth.getAccounts(function(error,accounts){
+        if (error) {
+          console.log(error);
+        }
 
-        invoiceRow.append(invoiceTemplate.html());
-      }
+        var account = accounts[0];
+
+        App.contracts.SmartInvoice.deployed().then(function(instance) {
+          invoiceInstance = instance;
+           
+          invoiceInstance.getInvoiceLength().
+          then(
+            function(result) {  
+              var totalInvoices = result.c[0];
+              console.log("Total invoice are "+totalInvoices);
+            
+              for (i = 0; i < totalInvoices; i++)
+               {
+                   console.log("Fetching invoice #"+i);
+                invoiceInstance.getInvoice(i).then(
+                    function(result)
+                    {
+                      console.log(result);
+                      invoiceTemplate.find('.invoice-id').text(result[3]);
+                      invoiceTemplate.find('.invoice-supplier').text(result[0]);
+                      invoiceTemplate.find('.invoice-buyer').text(result[1]);
+                      invoiceTemplate.find('.invoice-value').text(result[2].c[0]);
+                      invoiceTemplate.find('.invoice-duedate').text(new Date(result[3].c[0]));
+                      invoiceTemplate.find('.invoice-riskrating').text(result[6].c[0]);
+                      invoiceTemplate.find('.btn-sell').attr('data-id',result[3]);
+                      invoiceTemplate.find('.btn-applyrating').attr('data-id',result[3]);
+                      
+                      //invoiceTemplate.find('.btn-applyrating').attr('data-id', data[i].id);
+              
+                      invoiceRow.append(invoiceTemplate.html());
+
+                    }
+
+                );
+             
+              }
+              
+            }
+    
+          );
+
+          return 0;	
+        }).then(function(result) {
+          console.log(result);
+          return App.fillInvoiceData();
+        }).catch(function(err) {
+        console.log(err.message);
+        });
+      });
+    
+
+
+ 
     });
 
     return App.initWeb3();
@@ -75,8 +132,49 @@ App = {
   addInvoice: function() {
     event.preventDefault();
     
-    var supplierAddress = $('#supplierAddress').val();
-    alert(supplierAddress);
+    var buyerAddress = $('#buyerAddress').val();
+    var invoiceValue = $('#invoiceValue').val();
+    event.preventDefault();
+
+    var invoiceId = parseInt($(event.target).data('id'));
+    var invoiceInstance;
+  
+      web3.eth.getAccounts(function(error,accounts){
+        if (error) {
+          console.log(error);
+        }
+
+        var account = accounts[0];
+
+        App.contracts.SmartInvoice.deployed().then(function(instance) {
+          invoiceInstance = instance;
+          var today = new Date();
+          var todayMili = today.getTime(); 
+          var invoiceDueDate=App.parseDate($('#invoiceDate').val());
+          if  (invoiceDueDate != null)
+          {
+            var invoiceDueDateMili=invoiceDueDate.getTime();
+            alert(buyerAddress+","+invoiceValue+","+invoiceDueDateMili+","+todayMili+invoiceDueDateMili);
+            invoiceInstance.addInvoice(buyerAddress, invoiceValue,invoiceDueDateMili,todayMili,0,todayMili,true,invoiceDueDateMili);
+          
+          
+          }
+          else
+          {
+            alert("Please provide invoice date");
+          }    
+          return 0;	
+        }).then(function(result) {
+          console.log(result);
+          return App.fillInvoiceData();
+        }).catch(function(err) {
+        console.log(err.message);
+        });
+      });
+    
+
+
+
   },
 
   sellInvoice: function() {
@@ -98,9 +196,11 @@ App = {
 
         App.contracts.SmartInvoice.deployed().then(function(instance) {
           invoiceInstance = instance;
-
+          alert(newBuyer+"-"+invoiceId+"-"+newBuyer);
           return invoiceInstance.sellInvoice(invoiceId, newBuyer, {from: account});
-
+ 
+  
+	return 0;	
         }).then(function(result) {
           console.log(result);
           return App.fillInvoiceData();
@@ -130,7 +230,7 @@ App = {
 
         App.contracts.SmartInvoice.deployed().then(function(instance) {
           invoiceInstance = instance;
-
+          alert(invoiceId+"-"+newRating);
           return invoiceInstance.applyRiskRating(invoiceId,newRating);
 
         }).then(function(result) {
